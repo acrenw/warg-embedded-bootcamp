@@ -19,6 +19,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -87,7 +89,11 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_SPI1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
+  // start pwm once
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 
   /* USER CODE END 2 */
 
@@ -95,6 +101,41 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  // input: spi + adc
+	  // output: pwm (timer, drives motor)
+
+	  uint8_t tx[3] = {0};
+	  uint8_t rx[3] = {0};
+
+	  // mcu transmit data (mcp3004)
+	  tx[0] = 0x01; // 0000 0001
+	  tx[1] = 0x80; // sgl/diff, d2, d1, d0, x, x, x, x. We are single ended and ch0, so: 1,x,0,0,x,x,x,x -> 1000 000
+	  tx[2] = 0x00; // x, x, x, x, x, x, x, x -> 0000 0000
+
+	  // cs on pb8, go high then low to initiate communication
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+
+	  // full duplex transmit command while receiving response
+	  HAL_SPI_TransmitReceive(&hspi1, tx, rx, 3, HAL_MAX_DELAY); // (address to spi, tx, rx, bytes to transfer, timeout)
+
+	  // cs goes high to end communication
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+
+	  // extract mcu received data
+	  // rx[0]: ?, ?, ?, ?, ?, ?, ?, ?
+	  // rx[1]: ?, ?, ?, ?, ?, 0 (null), B9, B8
+	  // rx[2]: B7, B6, B5, B4, B3, B2, B1, B0
+	  uint16_t adc = ((uint16_t)(rx[1] & 0x03) << 8) | rx[2];
+
+	  // convert adc (0..1023) into pwm pulse counts/width (1000..2000) <- duty cycle 5-10%
+	  uint16_t ccr = adc * (1000u / 1023u) + 1000u;
+
+	  // write pwm
+	  // sets ccr (capture compare register) to change duty cycle
+	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, ccr);
+
+	  HAL_Delay(10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -115,8 +156,9 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48;
-  RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -126,11 +168,11 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI48;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
   {
     Error_Handler();
   }
