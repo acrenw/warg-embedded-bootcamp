@@ -36,6 +36,21 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define ADC_START_BIT 0x01
+#define ADC_SGL_BIT 0x01
+#define ADC_DIFF_BIT 0x00
+
+// channels are in order: d2, d1, d0
+#define ADC_CH0 0b000
+#define ADC_CH1 0b001
+#define ADC_CH2 0b010
+#define ADC_CH3 0b011
+
+#define ADC_MAX_COUNT 1023u
+#define ADC_MIN_COUNT 0u
+#define PWM_MAX_COUNT 2000u
+#define PWM_MIN_COUNT 1000u
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -95,25 +110,21 @@ int main(void)
   // start pwm once
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 
+  // set transmit and receive registers
+  uint8_t tx[3] = {0};
+  uint8_t rx[3] = {0};
+
+  // mcu transmit data (mcp3004)
+  tx[0] = ADC_START_BIT;
+  tx[1] = (ADC_SGL_BIT << 7) | (ADC_CH0 << 4);
+  tx[2] = 0x00;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  // input: spi + adc
-	  // output: pwm (timer, drives motor)
-
-	  uint8_t tx[3] = {0};
-	  uint8_t rx[3] = {0};
-
-	  // mcu transmit data (mcp3004)
-	  tx[0] = 0x01; // 0000 0001
-	  tx[1] = 0x80; // sgl/diff, d2, d1, d0, x, x, x, x. We are single ended and ch0, so: 1,x,0,0,x,x,x,x -> 1000 000
-	  tx[2] = 0x00; // x, x, x, x, x, x, x, x -> 0000 0000
-
 	  // cs on pb8, go high then low to initiate communication
-	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
 	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
 
 	  // full duplex transmit command while receiving response
@@ -129,7 +140,8 @@ int main(void)
 	  uint16_t adc = ((uint16_t)(rx[1] & 0x03) << 8) | rx[2];
 
 	  // convert adc (0..1023) into pwm pulse counts/width (1000..2000) <- duty cycle 5-10%
-	  uint16_t ccr = adc * (1000u / 1023u) + 1000u;
+	  // multiply before divide so to not truncate to 0
+	  uint16_t ccr = PWM_MIN_COUNT + (adc - ADC_MIN_COUNT) * (PWM_MAX_COUNT - PWM_MIN_COUNT) / (ADC_MAX_COUNT - ADC_MIN_COUNT);
 
 	  // write pwm
 	  // sets ccr (capture compare register) to change duty cycle
