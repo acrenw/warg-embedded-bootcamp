@@ -46,10 +46,9 @@
 #define ADC_CH2 0b010
 #define ADC_CH3 0b011
 
-#define ADC_MAX_COUNT 1023u
-#define ADC_MIN_COUNT 0u
-#define PWM_MAX_COUNT 2000u
-#define PWM_MIN_COUNT 1000u
+#define ADC_MAX_COUNT 1023
+#define PWM_MAX_COUNT 2000
+#define PWM_MIN_COUNT 1000
 
 /* USER CODE END PD */
 
@@ -141,7 +140,7 @@ int main(void)
 
 	  // convert adc (0..1023) into pwm pulse counts/width (1000..2000) <- duty cycle 5-10%
 	  // multiply before divide so to not truncate to 0
-	  uint16_t ccr = PWM_MIN_COUNT + (adc - ADC_MIN_COUNT) * (PWM_MAX_COUNT - PWM_MIN_COUNT) / (ADC_MAX_COUNT - ADC_MIN_COUNT);
+	  uint16_t ccr = (uint16_t) (PWM_MIN_COUNT + adc * (PWM_MAX_COUNT - PWM_MIN_COUNT) / ADC_MAX_COUNT);
 
 	  // write pwm
 	  // sets ccr (capture compare register) to change duty cycle
