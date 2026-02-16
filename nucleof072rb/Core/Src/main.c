@@ -47,8 +47,9 @@
 #define ADC_CH3 0b011
 
 #define ADC_MAX_COUNT 1023
-#define PWM_MAX_COUNT 2000
-#define PWM_MIN_COUNT 1000
+#define PWM_MIN_COUNT 3200
+#define PWM_MAX_COUNT 6400
+
 
 /* USER CODE END PD */
 
@@ -138,7 +139,7 @@ int main(void)
 	  // rx[2]: B7, B6, B5, B4, B3, B2, B1, B0
 	  uint16_t adc = ((uint16_t)(rx[1] & 0x03) << 8) | rx[2];
 
-	  // convert adc (0..1023) into pwm pulse counts/width (1000..2000) <- duty cycle 5-10%
+	  // convert adc (0..1023) into pwm pulse counts/width (3200..6400) <- duty cycle 5-10%
 	  // multiply before divide so to not truncate to 0
 	  uint16_t ccr = (uint16_t) (PWM_MIN_COUNT + adc * (PWM_MAX_COUNT - PWM_MIN_COUNT) / ADC_MAX_COUNT);
 
@@ -167,9 +168,8 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48;
+  RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -179,11 +179,11 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI48;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
